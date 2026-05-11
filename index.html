@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="MisTareas"/>
+  <title>MisTareas – Gestión de Tareas</title>
+  <meta name="description" content="App de gestión de tareas por roles con Firebase en tiempo real."/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="screen-loading" class="screen active loading-screen">
+  <div class="loading-content">
+    <div class="logo-icon" style="margin:0 auto 20px">✓</div>
+    <h1 class="app-title">MisTareas</h1>
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Conectando con Firebase...</p>
+  </div>
+</div>
+
+<!-- ===== ROLE SELECTION ===== -->
+<div id="screen-role" class="screen active">
+  <div class="role-container">
+    <div class="logo-area">
+      <div class="logo-icon">✓</div>
+      <h1 class="app-title">MisTareas</h1>
+      <p class="app-subtitle">¿Cómo quieres entrar?</p>
+    </div>
+    <div class="role-cards">
+      <button class="role-card admin-card" onclick="startAdminLogin()">
+        <div class="role-icon">⚙️</div>
+        <div class="role-info">
+          <span class="role-name">Admin</span>
+          <span class="role-desc">Gestionar tareas y equipo</span>
+        </div>
+        <span class="role-arrow">→</span>
+      </button>
+      <button class="role-card employee-card" onclick="openEmployeeSelect()">
+        <div class="role-icon">👤</div>
+        <div class="role-info">
+          <span class="role-name">Empleado</span>
+          <span class="role-desc">Ver mis tareas asignadas</span>
+        </div>
+        <span class="role-arrow">→</span>
+      </button>
+    </div>
+    <p class="version-note">v2.0 · 100% gratuito</p>
+  </div>
+</div>
+
+<!-- ===== ADMIN SCREEN ===== -->
+<div id="screen-admin" class="screen hidden">
+  <header class="app-header admin-header">
+    <button class="back-btn" onclick="goHome()">← Salir</button>
+    <div class="header-title">⚙️ Admin</div>
+    <button class="change-pin-btn" onclick="startChangeAdminPin()" title="Cambiar PIN de Admin">🔑</button>
+    <div class="header-badge admin-badge" id="admin-pending-badge">0</div>
+  </header>
+  <div class="tab-bar">
+    <button class="tab-btn active-tab" id="tbtn-new"     onclick="showAdminTab('new')">➕ Nueva</button>
+    <button class="tab-btn"            id="tbtn-tasks"   onclick="showAdminTab('tasks')">📋 Tareas</button>
+    <button class="tab-btn"            id="tbtn-team"    onclick="showAdminTab('team')">👥 Equipo</button>
+    <button class="tab-btn"            id="tbtn-history" onclick="showAdminTab('history')">🕑 Historial</button>
+  </div>
+  <div class="screen-content">
+
+    <!-- TAB NEW TASK -->
+    <div id="tab-new" class="tab-panel">
+      <div class="card">
+        <h2 class="section-title">Nueva Tarea</h2>
+        <label class="field-label">Título *</label>
+        <input type="text" id="task-title" class="input-field" placeholder="¿Qué hay que hacer?" maxlength="100"/>
+        <label class="field-label">Descripción / Instrucciones</label>
+        <textarea id="task-desc" class="input-field textarea-field" placeholder="Detalla lo que necesitas..." rows="3" maxlength="600"></textarea>
+        <label class="field-label">Asignar a *</label>
+        <select id="task-assign" class="input-field select-field"><option value="">— Selecciona empleado —</option></select>
+        <label class="field-label">Prioridad</label>
+        <div class="priority-btns">
+          <button class="prio-btn prio-high" id="prio-high" onclick="setPriority('high')">🔴 Alta</button>
+          <button class="prio-btn prio-med active-prio" id="prio-med" onclick="setPriority('med')">🟡 Media</button>
+          <button class="prio-btn prio-low" id="prio-low" onclick="setPriority('low')">🟢 Baja</button>
+        </div>
+        <label class="field-label">Fecha límite</label>
+        <input type="date" id="task-deadline" class="input-field"/>
+        <label class="field-label">Foto de referencia</label>
+        <div class="photo-upload-area" id="photo-area" onclick="document.getElementById('photo-input').click()">
+          <div id="photo-placeholder"><span class="photo-icon">📷</span><span>Toca para agregar foto</span></div>
+          <img id="photo-preview" class="photo-preview hidden" alt="Preview"/>
+        </div>
+        <button class="photo-remove-btn hidden" id="photo-remove-btn" onclick="removePhoto(event)">✕ Quitar foto</button>
+        <input type="file" id="photo-input" accept="image/*" class="hidden" onchange="handlePhotoUpload(event)"/>
+        <button class="btn-action" onclick="addTask()">Asignar Tarea</button>
+      </div>
+    </div>
+
+    <!-- TAB TASKS -->
+    <div id="tab-tasks" class="tab-panel hidden">
+      <div class="filter-row">
+        <select id="filter-employee" class="input-field select-field-sm" onchange="renderAdminTasks()">
+          <option value="all">Todos los empleados</option>
+        </select>
+        <div class="status-pills">
+          <button class="spill active-spill" onclick="setStatusFilter('all',this)">Todas</button>
+          <button class="spill" onclick="setStatusFilter('pending',this)">Pendientes</button>
+          <button class="spill" onclick="setStatusFilter('inprogress',this)">En Proceso</button>
+          <button class="spill" onclick="setStatusFilter('done',this)">Listas</button>
+        </div>
+      </div>
+      <div id="admin-task-list" class="task-list"></div>
+      <div id="admin-empty" class="empty-state hidden">
+        <div class="empty-icon">📭</div><p>Sin tareas</p><span>Crea una desde "Nueva"</span>
+      </div>
+    </div>
+
+    <!-- TAB TEAM -->
+    <div id="tab-team" class="tab-panel hidden">
+      <div class="card">
+        <div class="team-header">
+          <h2 class="section-title">Empleados</h2>
+          <button class="btn-add-emp" onclick="openAddEmployee(null)">+ Agregar</button>
+        </div>
+        <div id="employee-list" class="employee-list"></div>
+        <div id="emp-list-empty" class="empty-state hidden">
+          <div class="empty-icon">👥</div><p>Sin empleados</p><span>Agrega el primero arriba</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB HISTORY -->
+    <div id="tab-history" class="tab-panel hidden">
+      <div class="filter-row" style="margin-bottom:14px">
+        <select id="filter-history-emp" class="input-field select-field-sm" onchange="renderHistory()">
+          <option value="all">Todos los empleados</option>
+        </select>
+        <select id="filter-history-status" class="input-field select-field-sm" onchange="renderHistory()">
+          <option value="all">Todas las finalizadas</option>
+          <option value="done">✅ Completadas</option>
+        </select>
+      </div>
+      <div id="history-list" class="task-list"></div>
+      <div id="history-empty" class="empty-state hidden">
+        <div class="empty-icon">📜</div><p>Sin historial aún</p><span>Las tareas completadas aparecerán aquí</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== EMPLOYEE SCREEN ===== -->
+<div id="screen-employee" class="screen hidden">
+  <header class="app-header emp-header">
+    <button class="back-btn" onclick="goHome()">← Salir</button>
+    <div class="header-title">
+      <div class="emp-avatar-sm" id="emp-avatar-hdr">?</div>
+      <span id="emp-name-hdr">Empleado</span>
+    </div>
+    <div class="header-badge emp-badge" id="emp-pending-badge">0</div>
+  </header>
+  <div class="screen-content">
+    <div class="stats-bar">
+      <div class="stat-item"><span class="stat-num s-pending" id="stat-pending">0</span><span class="stat-label">Pendientes</span></div>
+      <div class="stat-divider"></div>
+      <div class="stat-item"><span class="stat-num s-inprog" id="stat-inprog">0</span><span class="stat-label">En Proceso</span></div>
+      <div class="stat-divider"></div>
+      <div class="stat-item"><span class="stat-num s-done" id="stat-done">0</span><span class="stat-label">Listas</span></div>
+    </div>
+    <section class="tasks-section">
+      <h2 class="section-title">⏳ Pendientes</h2>
+      <div id="emp-pending-list" class="task-list"></div>
+      <div id="emp-empty-pending" class="empty-state"><div class="empty-icon">🎉</div><p>¡Todo al día!</p><span>Sin pendientes</span></div>
+    </section>
+    <section class="tasks-section">
+      <h2 class="section-title inprog-title">🔄 En Proceso</h2>
+      <div id="emp-inprog-list" class="task-list"></div>
+      <div id="emp-empty-inprog" class="empty-state hidden"><div class="empty-icon">💤</div><p>Nada en proceso</p></div>
+    </section>
+    <section class="tasks-section">
+      <details class="done-collapsible">
+        <summary class="section-title done-summary">✅ Completadas <span id="done-count-label">(0)</span></summary>
+        <div id="emp-done-list" class="task-list mt-8"></div>
+      </details>
+    </section>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- PIN Modal -->
+<div id="modal-pin" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h2 class="modal-title" id="pin-modal-title">🔐 PIN</h2>
+    <p class="modal-sub" id="pin-modal-sub">Ingresa tu PIN de 4 dígitos</p>
+    <div class="pin-dots" id="pin-dots">
+      <span class="dot" id="d1"></span><span class="dot" id="d2"></span>
+      <span class="dot" id="d3"></span><span class="dot" id="d4"></span>
+    </div>
+    <div class="pin-keypad">
+      <button class="key" onclick="pinKey('1')">1</button>
+      <button class="key" onclick="pinKey('2')">2</button>
+      <button class="key" onclick="pinKey('3')">3</button>
+      <button class="key" onclick="pinKey('4')">4</button>
+      <button class="key" onclick="pinKey('5')">5</button>
+      <button class="key" onclick="pinKey('6')">6</button>
+      <button class="key" onclick="pinKey('7')">7</button>
+      <button class="key" onclick="pinKey('8')">8</button>
+      <button class="key" onclick="pinKey('9')">9</button>
+      <button class="key key-clear" onclick="pinClear()">⌫</button>
+      <button class="key" onclick="pinKey('0')">0</button>
+      <button class="key key-ok" onclick="pinSubmit()">✓</button>
+    </div>
+    <p id="pin-error" class="pin-error hidden">PIN incorrecto. Intenta de nuevo.</p>
+    <button class="btn-ghost" onclick="closeModal('modal-pin')">Cancelar</button>
+  </div>
+</div>
+
+<!-- Employee Select Modal -->
+<div id="modal-emp-select" class="modal-overlay hidden">
+  <div class="modal-card modal-tall">
+    <h2 class="modal-title">👤 ¿Quién eres?</h2>
+    <p class="modal-sub">Selecciona tu nombre</p>
+    <div id="emp-select-list" class="emp-select-list"></div>
+    <div id="emp-select-empty" class="empty-state hidden">
+      <div class="empty-icon">👥</div><p>Sin empleados</p><span>Pide al Admin que te agregue</span>
+    </div>
+    <button class="btn-ghost" onclick="closeModal('modal-emp-select')">Cancelar</button>
+  </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div id="modal-task-detail" class="modal-overlay hidden" onclick="overlayClose(event,'modal-task-detail')">
+  <div class="modal-card modal-tall detail-card">
+    <div class="detail-tags">
+      <span id="detail-prio-tag" class="prio-tag"></span>
+      <span id="detail-status-tag" class="status-tag"></span>
+    </div>
+    <h2 class="detail-title" id="detail-title"></h2>
+    <p class="detail-assigned" id="detail-assigned"></p>
+    <img id="detail-photo" class="detail-photo hidden" alt="Referencia"/>
+    <p class="detail-desc" id="detail-desc"></p>
+    <div class="detail-meta">
+      <span id="detail-deadline"></span>
+      <span id="detail-created"></span>
+    </div>
+    <div id="detail-comment-box" class="comment-box hidden">
+      <p class="comment-label">💬 Comentario:</p>
+      <p id="detail-comment-text" class="comment-text"></p>
+    </div>
+    <div id="detail-actions" class="detail-actions"></div>
+    <button class="btn-ghost" onclick="closeModal('modal-task-detail')">Cerrar</button>
+  </div>
+</div>
+
+<!-- Done Comment Modal -->
+<div id="modal-done" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h2 class="modal-title">✅ Completar tarea</h2>
+    <p class="modal-sub">Deja un comentario (opcional)</p>
+    <textarea id="done-comment-input" class="input-field textarea-field" placeholder="Ej: Listo, pero faltó el documento..." rows="4"></textarea>
+    <button class="btn-action" onclick="submitDone()">Marcar como Completada</button>
+    <button class="btn-ghost" onclick="closeModal('modal-done')">Cancelar</button>
+  </div>
+</div>
+
+<!-- Add/Edit Employee Modal -->
+<div id="modal-add-emp" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h2 class="modal-title" id="add-emp-title">➕ Nuevo Empleado</h2>
+    <label class="field-label">Nombre *</label>
+    <input type="text" id="emp-name-input" class="input-field" placeholder="Nombre completo" maxlength="40"/>
+    <label class="field-label">PIN de 4 dígitos *</label>
+    <input type="tel" id="emp-pin-input" class="input-field" placeholder="Ej: 5678" maxlength="4" pattern="[0-9]{4}"/>
+    <label class="field-label">Rol</label>
+    <select id="emp-role-input" class="input-field select-field">
+      <option value="employee">👤 Empleado</option>
+      <option value="admin">⚙️ Administrador</option>
+    </select>
+    <label class="field-label">Color</label>
+    <div class="color-picker" id="color-picker"></div>
+    <button class="btn-action" onclick="saveEmployee()">Guardar</button>
+    <button class="btn-ghost" onclick="closeModal('modal-add-emp')">Cancelar</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script src="app.js"></script>
+</body>
+</html>
